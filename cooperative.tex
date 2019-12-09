@@ -1,0 +1,236 @@
+\section{Intra-Stage Parallelization for Hybrid CPU-GPU Nodes}
+\label{sec:intra-cooperative}
+
+The most compute intensive stage of the distributed IVFADC, the Local Index, 
+is the target of the intra-stage parallelization. Our strategy consists of using 
+multiple CPU-cores and GPUs available in each computing node to execute queries 
+arriving at each LI. A single LI instance may be created per computing node, 
+instead of multiple, reducing the number of database partitions, and, consequently, 
+the amount of data transferred in the network to answer a query.
+
+There are two approaches for parallelizing the LI stage and perform search
+using CPU and GPU cooperatively. The first is to divide the input queries 
+among the devices and have the entire database duplicated in their memories. The second
+approach is to split the database between CPU and GPU and process
+all the queries in both devices against their different partitions. In 
+this case, it is necessary to merge k-NN results computed by CPU and GPU within a node, which
+would incur in synchronization overheads not seen in the first approach.
+
+In this paper, we use the both approaches. When data fits into memory of both
+devices, queries are divided for independent execution among devices to avoid 
+synchronization between them. In this case,
+queries must divided in accordance to their computing power to minimize 
+load imbalance. This is computed using the devices throughput collected in an off-line 
+profiling phase. The second approach is 
+essential to allow for out-of-core GPU execution and
+is described in next section.
+
+%The intra-stage parallelization exploits inter-query parallelism to process them independently
+%in the CPUs or GPUs available. When both devices are used cooperatively, input queries and/or 
+%the database should be partitioned for the execution on them. 
+%
+%This motivates the use of two schemes: 
+%(i)~divide the input queries among the devices and have the entire database both
+%in the CPU and GPU memory, and (ii)~split the database between the CPU and GPU and process
+%all the queries in both devices on different partitions of the database assigned to
+%each of them. This approach requires an additional merging of k-NN results computed by CPU 
+%and GPU within a compute node.
+%
+%The first approach is only viable when the database (indexing) partition 
+%assigned to the LI stage fits in the GPU memory. In this setting, keeping a replica
+%of the index in both devices will decouple their execution. This avoids synchronization 
+%necessary to merge their partial k-NN results as required in the second approach. However, 
+%it is still necessary to divide the
+%input queries among the devices in accordance to their computing power to avoid load
+%imbalance among them. This division is performed using information collected in an off-line 
+%profiling phase. 
+
+\section{Intra-Stage Out-of-Core CPU-GPU Cooperative Execution}
+
+Given the large amount data used by our target application, restricting the use 
+of the GPU only to cases in 
+which the devices' memory is sufficient to store the whole indexing may be inefficient.
+Thus, in this section, we extend our solution to enable the use of the 
+GPU alone or collaboratively with the CPU when its memory can not store the index partition assigned
+to a LI stage. 
+
+The proposed approach divides the indexing partition assigned to a LI stage instance
+into smaller non-overlapping subpartitions. The query processing then compute
+the query search for each subpartition, which are assigned for execution on the 
+CPUs and GPUs available, and the
+k-NN computed in the subpartitions are merged into a node local k-NN. This strategy is 
+similar to that used in the distributed-memory
+parallelization, being the overall approach a hierarchical parallelization with 
+multi-level partitions to better adapt to the computing system in each 
+level: distributed memory and local node.
+
+%\begin{algorithm}[H]
+%\label{alg:cpu_thread}
+%\caption{Cpu Thread}
+%\begin{algorithmic}[1]
+%\While{$True$}
+%	\For{$cpu\_queue \in cpu\_queues$}
+%			\State $process\_cpu(cpu\_queue)$
+%	\EndFor
+%\EndWhile
+%\end{algorithmic}
+%\end{algorithm}
+%
+%\begin{algorithm}[H]
+%\label{alg:gpu_thread}
+%\caption{Gpu Thread}
+%\begin{algorithmic}[1]
+%\While{$True$}
+%    \For{$gpu\_queue \in gpu\_queues$}
+%        \State $process\_gpu(gpu\_queue)$
+%	\EndFor
+%	\If{$gpu\_queues.largest().length = 0$} 
+%	    \If{$cpu\_queues.largest().length \geq threshold$}
+%	        \State $switch\_queues(CPU2GPU)$
+%	    \EndIf
+%	\EndIf
+% 	\If{$gpu\_queues.largest().length = 0 \land cpu\_queues.largest().length \geq threshold$} 
+% 		\State $switch\_queues(gpu\_queues.first(), cpu\_queues.largest())$
+% 	\EndIf
+%\EndWhile
+%\end{algorithmic}
+%\end{algorithm}
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=\columnwidth]{figs/out-of-core.png}}
+\caption{Data base multi-level partitioning for multi-node and multi-device intra-node execution.}
+\label{fig:switch}
+\end{figure}
+
+Such as presented in Figure~\ref{fig:switch}, there is a queue of input queries 
+to be processed and a list holding k-NN results already computed for each  
+subpartition. The processing of those subpartitions follow the same strategy
+as presented in the previous sections, either the GPU or CPU are called to process a 
+block of queries from a subpartition. In this way, if the GPU is used alone,
+the subpartitions are assigned and processed one-by-one in the GPU.
+
+The CPU-GPU cooperative execution is interesting in this context because the 
+relative performance of CPU vs. GPU (or speedup attained by the GPU) may vary  
+according to the system load and amount of subpartitions the GPU can hold simultaneously.
+For instance, the larger the number of queries to be evaluated on a subpartition, 
+the higher is the GPU efficiency. Thus, performing a static division of the 
+subpartitions to be processed by each device is suboptimal. 
+
+We address this problem with an initial work partitioning between CPU and GPU in which the
+GPU is assigned the maximum number of subpartitions it can store. The subpartitions 
+assigned to devices are stored either in the $workTasks.GPU$ or $workTasks.CPU$ 
+list, and the GPU will preferably process queries of a partition it owns to avoid 
+unnecessary data transfers. Further, during the execution, a work stealing is
+executed to allow the GPU assist in the execution of partitions assigned to the CPU in order
+to minimize load imbalance between devices.
+
+
+\begin{algorithm}[h]
+\caption{GPU Manager Thread Control Flow}
+\label{alg:out-of-core}
+\begin{algorithmic}[1]
+%\Procedure{CPU Thread}{workTasks}       
+%    \While{$True$}
+%	    \For{$task \in workTasks.cpu$}
+%			\State $process\_cpu(task)$
+%	    \EndFor
+%    \EndWhile
+%\EndProcedure
+\Procedure{GPU Thread}{workTasks}
+    \While{$True$}
+        \For{$task \in workTasks.gpu$}
+            \State $processGpu(task)$
+	    \EndFor
+	    \If{$workTasks.gpu.largest() != 0$}
+	        \State {\bf continue;}
+        \EndIf
+        \Comment{Work Stealing condition}
+	    \If{$workTasks.cpu.largest() \geq threshold$}
+	       \State $workTasks.swapTasks(CPU2GPU)$
+	    \EndIf
+    \EndWhile
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+This overall execution scheme is shown in Algorithm~\ref{alg:out-of-core}. First,
+from lines~3 to~5, the GPU manager thread will iterate over tasks assigned to the GPU and 
+process them. Once it has finished, it checks whether new queries have arrived for one of
+the subpartitions it owns. If no work
+is available for the GPU, it will try to process a subpartition currently attributed to the 
+CPU. A subpartion is stolen by the GPU if its processing times on the CPU is higher 
+than the cost of processing it on the GPU (including transferring). In fact, the processing
+times in each device will be determined by the number of queries waiting to be processed
+in the subpartition, and the $threshold$ value is the minimum number of queries that necessary
+to be worth stealing by the GPU. The stealing condition is shown in line~9, when it is true
+we just swap that partition with one available in the GPU memory as presented in line~10.
+
+Finally, we want to mention that we have evaluated the use asynchronous data transfer between 
+CPU and GPU. In this scenario, however, it is necessary to free a space in the GPU memory that
+is already occupied to provide room for the asynchronous transfers that we implemented
+using a double-buffer. As we further partition the database, there is a lost in performance
+that offsets the gains with the data transfer optimizations. For instance, when 50\% of
+the data fits in the GPU memory, we would need to have multiple partitions with 25\% of
+the GPU memory to process one while the other is transferred. However, computing multiple
+smaller partitions, i.e. of 25\% of the data, is more expensive that processing a larger
+partition in a single GPU call. As a consequence, asynchronous data transfers are not 
+worthwhile in our case.
+
+
+
+
+%\textit{Discussion on asynchronous data transfers between CPU and GPU.}
+%
+%Above we can see the pseudo-code of the algorithm. Please note that synchronization 
+%code (locks, unlocks, etc) was omitted.
+%
+%The idea is simple: first, we divide the database into pieces of equal size (shards). Some of 
+%those shards will reside on the GPU memory, and the rest will be on the CPU memory. We maintain a 
+%query queue for each of the shards. Figure \ref{fig:out-of-core-memory} illustrates this.
+%
+%\begin{figure}[htbp]
+%\centerline{\includegraphics[scale=0.5]{figs/out-of-core-memory.png}}
+%\caption{In this case, we can hold only 20\% of the database in the GPU, so it holds one shard, %while the CPU holds 4. Each shard has a query queue associated with it.}
+%\label{fig:out-of-core-memory}
+%\end{figure}
+%
+%The process\_gpu function is pretty simple. It process all the queries associated with the
+%gpu\_queue in its corresponding shard. They are processed in blocks of min\_bs queries. min\_bs is
+%defined in section \ref{query-rate-aware}. The process\_cpu function works in a similar manner,
+%however, we don't restrict it to execute min\_bs queries at a time.
+
+%The algorithm described up to now is a fully working algorithm by itself, but we can improve it by
+%allowing the GPU to exchange one of its shards with the CPU, when the GPU is idle. The GPU is idle
+%when all of its query queues are empty. To verify this, we use the largest method, which returns
+%the query queue with the largest number of elements. We also use the largest method to obtain the
+%CPU queue that has the most queries, and then, if it has at least a certain minimum amount of
+%queries (threshold), we switch it with any of the queries in the GPU. It doesn’t matter which one
+%since they are all empty. The switch\_queues function deals with the switch operation: loads the
+%right database shard in the GPU, and updates the cpu\_queues and gpu\_queues as necessary.
+
+
+
+%The ”certain minimum amount of queries” (threshold) is computed as the number of queries that, when
+%computed in the CPU, would take roughly half the time that it would take to load one of the
+%database pieces in the GPU. This is done so that we can be independent of the specific pair of CPU,
+%GPU, and database size that we are using. 
+%
+%By doing this switch of shards, we can better leverage the performance benefits of the GPU when
+%the query rate is high, while also avoiding the need to load shards at runtime in the GPU (which
+%is slow) when the query rate is low.
+% Forgot to mention the merge of the answers
+%The way that the distributed system was specified in section \ref{sec:parallel} can work for searches either in the CPU, GPU, or both. If we use the CPU or the GPU alone, the process is pretty simple: we simply take the queries we received and search them against the shard that the search node holds, using the PQNNS algorithm as described in section \ref{sec:pqnns}. If we use then together, then it becomes necessary to establish how the work and the data are to be divided.  
+%
+%There are basically two ways to combine the CPU and GPU: divide the base into two pieces, and have the CPU and GPU process the same queries, or keep the entire database in both, and process each query either in the CPU or in the GPU alone. Since the GPU is much faster than the CPU for this problem, the first approach doesn't produce good results. The execution time ends up being, roughly, half the execution time on the CPU, since the time taken by the GPU is very small next to the CPU time. It is faster to simply execute everything on the GPU. Therefore, we took the latter approach. It's important to note that the other approach, to split the database, has the advantage that it is more efficient memory-wise. We will return to this idea in section \ref{out-of-core}, when we consider databases that are so big that we need to use the CPU memory as well.
+%
+%We implemented a simple strategy: we execute queries in the CPU and GPU in lockstep. For the GPU, we use whatever policy that produces good results when the GPU is used alone. For an example of such a policy, see section \ref{sec:parallel}. For the CPU, we predict how much time the GPU execution will take, based on benchmark data, and we process a number of queries such that the CPU will end processing its queries at the same time as the GPU will end processing its queries. 
+
+%\begin{figure}[htbp]
+%\centerline{\includegraphics[scale=0.6]{figs/cooperative.png}}
+%\caption{In this example, the GPU process queries twice as faster as the CPU, so we send twice as many queries to the GPU as the CPU. Bear in mind that we don't require that all the queries on the input buffer should be processed at once, eg. queries 7 and 8 will wait for the next search iteration.}
+%\label{fig}
+%\end{figure}
+
+%While this strategy worked in certain scenarios, the overall results were not that good. So, for the rest of this paper, we will focus on processing queries only on the GPU, and use the CPU only when necessary. 
+
+

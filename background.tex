@@ -1,0 +1,81 @@
+\chapter{Background}
+\label{sec:back}
+
+Similarity search is a fundamental operation found in Content-Based Multimedia Retrieval (CBMR). In multimedia retrieval, the documents are embedded into a multi-dimensional space using descriptors, which intend to bridge the ``semantic gap" between the low-level coding  representing the documents and their semantic concepts. The search is then performed in the descriptors space by using a distance metric (e.g., Euclidean distance) to represent the similarity between a query and the database descriptors. 
+
+Several descriptors have been evaluated in the literature. They capture different properties of the data, such as color, texture, shape, and orientation; and are encoded into high-dimensional feature vectors. Some of the most popular descriptors are Scale Invariant Feature Transform (SIFT), Gist, Bag-of-Features (BOW), Vector of Locally Aggregated Descriptors (VLAD) and deep features~\cite{Wan:2014:DLC:2647868.2654948,10.1007/978-3-319-10584-0_26,Douze:2009:EGD:1646396.1646421}. Regardless of the descriptor used, the similarity search is a major time consuming phase of most multimedia applications.
+
+\section{Similarity Search Algorithms}
+
+Given a descriptor query, the similarity search refers to finding the closest k nearest neighbor (k-NN) descriptors in the database. The exact brute force algorithm for this operation computes the distance from the query descriptor to each descriptor in the database, and selects the closest k ones. This is, however, prohibitive for online multimedia services. 
+
+In order to reduce the cost of the exact k-NN, several data structures (e.g., kd-trees~\cite{Friedman1977209}, k-means trees~\cite{Muja2009331}, ball trees~\cite{UHLMANN1991175}, and cover trees~\cite{Beygelzimer:2006:CTN:1143844.1143857}) were used to divide the database of descriptors into partitions according to their spatial location. This organization is intended to prune partitions during the search phase and, consequently, speed it up. However, because of the well known  ``curse of dimensionality''~\cite{Bohm2001322,Weber:1998:QAP:645924.671192}, the sparsity of the data quickly increases as the data dimensionality grows. This reduces the pruning efficiency of those data structures and, as a consequence, their performance improvements vs. the brute force search.
+
+Due to the the high cost of computing the exact k-NN, the approximate nearest neighbors (ANN) search has been proposed for applications in which the exact solution is not essential. The approximation in this case may be bound by the number of missing correct descriptors or their distance to the query~\cite{Indyk:1998:ANN:276698.276876}. Even on the ANN case, efficiently searching large databases remains a very challenging problem.
+
+Several ANN methods have been proposed~\cite{Gionis:1999:SSH:645925.671516,5432202,NIPS2009_3864,6809191,Muja2009331}. The locality sensitive hashing (LSH) uses locality sensitive hashing functions to index data into multiple hash tables. Descriptors in a hash entry, or bucket, are expected to be close in the multi-dimensional space. The search visits buckets to which the query is hashed, the distances to descriptors on those buckets are computed, and the nearest neighbors from that subset will compose the query answer. The tuning of LSH parameters leads to several hash tables, which poses a scalability challenge with large databases due to high memory demands. Also, modern machines have a low random memory access performance~\cite{TeodoroKKCS14}, which is a major pattern in LSH during hash table buckets visits. 
+
+The fast library for approximate nearest neighbors (FLANN) is a popular open source project for ANN search. It implements multiple state-of-the-art algorithms and selects the most appropriate along with its parameters for a given dataset. This alleviates the hard and error-prone task of choosing from the several indexing approaches
+available. 
+%It also shows that a single approach will not be efficient in all cases~\cite{Muja2009331}.
+It also shows that there is no one-size-fits-all solution for ANN search~\cite{Muja2009331}. Because of its efficiency, FLANN is typically used as a baseline for performance comparisons.
+
+The product quantization based nearest neighbor search is another approach to the problem~\cite{5432202}. 
+It divides the high-dimensional multimedia descriptor vectors into low dimensional subspaces, 
+and quantizes the subspaces independently. Two quantization phases are used, the first 
+called coarse and the second to quantize residuals from the first. The 
+coarse quantization is used to assign objects to entries of an inverted file, whereas 
+the second compresses residual distances to the coarse quantizers. This results 
+in the IVFADC indexing, which has been shown to be very competitive as
+compared to the previous works~\cite{5432202}. 
+
+Because of its efficiency, we have parallelized IVFADC 
+for distributed systems equipped with CPU and GPU (Section~\ref{sec:pqnns}). There have been proposed improvements to the IVFADC in the literature
+with the multi-index~\cite{6915715} that depends on a complex index visiting sequence, LOPQ~\cite{6909695}, and Polysemous codes~\cite{978-3-319-46475-6_48}. However, as discussed in~\cite{8733051}, these estrategies are not appropriate for GPU implementation. As a consequence,
+the current state-of-the-art ANN implementation for GPUs is based on IVFADC~\cite{8733051}.
+Furthermore, despite choosing IVFADC for our parallelization and optimizations, we argue that the proposed
+approaches for dealing with varying workloads, the distributed-memory parallelization strategy, and
+the optimizations for processing GPU out-of-core databases can benefit other indexing algorithms.
+
+\section{Parallel Similarity Search}
+
+Although most of the ANN research has focused on optimizing the speed and
+quality of sequential algorithms, this is changing because of 
+current demands for indexing very large databases. Multiple works have  evaluated
+multi-core CPUs, GPUs, and distributed memory machines to perform large-scale multimedia similarity search~\cite{2398596,Stupar10rankreduce,Moise:2013,8733051,6267877,Krulis2012,7780592,6809191,2093973.2094002,Teodoro2014,ANDRADE201981}.
+
+Distributed memory implementations of LSH were developed on top of MapReduce~\cite{2398596,Stupar10rankreduce}. 
+%In both cases, a $map\ phase$ is employed to visit multiple hash buckets, whereas the $reduce\ phase$ 
+%aggregates local results returned by the map operations. 
+The approach of Stupar 
+et al.~\cite{Stupar10rankreduce} stores the data into a distributed file system. Because LSH may require several 
+hash tables, the data is replicated in each of the tables. This 
+increases the query latency and reduces efficiency, making this solution 
+impractical for large databases~\cite{Stupar10rankreduce}. Bahmani et al.~\cite{2398596} implemented a variant of the 
+LSH using an Active Distributed Hash Table (DHT) to store the database in memory, and it assumes that a single LSH hash table is 
+instantiated. In this case, multiple queries to the LSH table are required to attain the desired search quality as performed by 
+multi-probe LSH~\cite{1325958}, but it is not evaluated. Another relevant work~\cite{Moise:2013} 
+has discussed the deployment of the Index Tree on top of MapReduce. This work has
+implemented a full search engine in a distributed memory system and discussed the technical 
+challenges in this process. Similarly to the previous works, this solution is optimized 
+for batch processing only. %FLANN~\cite{6809191} proposed a distributed memory parallelization based on the master-slave model in which
+%the indexing scheme is instantiated into several nodes and the input data is partitioned among them. Their 
+%execution, as discussed in~\cite{6809191}, suffers from high memory demands due to the algorithms implemented, 
+%limiting the scalability for large datasets.
+% Im not sure if this is allowed
+In a previous work~\cite{ANDRADE201981}, we have implemented a distributed memory IVFADC 
+that executes on CPU-only machines. It is extended in this paper in multiple directions. Here, we proposed and implemented (i)~the use
+of GPUs in the distributed memory execution; (ii)~the cooperative
+execution on hybrid systems equipped with CPU-GPU; (iii)~new algorithms for adjusting the GPU search
+with the goal of minimizing response times; (iv)~an out-of-core GPU execution to process databases
+larger than the GPU memory; (v)~optimizations to minimize load 
+imbalance between CPU and GPU with the use of work stealing.
+
+The use of GPUs has been evaluated on shared memory systems~\cite{8733051,6267877,Krulis2012,7780592,2093973.2094002}. Among these works, the ones that
+implemented the IVFADC~\cite{7780592,8733051} have attained the best trade-off with respect to the search quality and 
+throughput. These implementations have been compared and the~\cite{8733051} 
+has attained the 
+best performance.
+%As such, in this work, we leveraged that GPU implementation, adapted, and used it as a basic building block of our distributed 
+%memory implementation.
+In this work, it is used as a basic building of our distributed memory implementation.

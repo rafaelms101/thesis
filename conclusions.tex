@@ -1,0 +1,48 @@
+\chapter{Conclusions and future directions}
+\label{sec:conclusions}
+
+This paper presented an efficient distributed memory implementation of 
+the IVFADC for hybrid machines equipped with CPU and GPU, which also
+supports effective out-of-core GPU execution with work stealing. Along with the
+IVFADC ability of describing the data descriptors using small 
+quantization codes, this parallel system can handle very large databases
+while, at the same time, delivering high throughput and achieving good 
+parallel efficiency. We have also developed strategies to adapt the system 
+during the execution in order to minimize response times under fluctuation workloads, as observe in online multimedia services. For instance, our DQPP approach that adapts the
+system at run-time has been able to reduce the response times in up to 1.35$\times$
+as compare to the best static configuration in in-core settings. The improvements
+in the out-of-core execution with our optimizations are even higher as we reduced 
+the response times in about 2.4$\times$ on average with work stealing.
+
+
+In the future works, we intend to evaluate new processors, such as FPGAs, for deploying
+ANN algorithms and to generalize optimizations proposed and apply them
+to other ANN algorithms. Further, we will analyze the use of different 
+algorithms in the cooperative execution between CPU and GPU, which may allow
+for choosing the indexing that best perform in each processor.
+
+
+%with different devices, and changing their parameters, when 
+%possible, to trade speed for accuracy in fluctuation workloads is another aspect
+%of interest.
+
+%For future work, taking our idea and generalizing it for a variety of different similarity search
+%algorithms might be a good idea. Maybe even allowing the use of different algorithms for the CPU and the GPU,
+%since the best algorithms for each one is different.  
+%
+%Another possible extension of this work might be to consider the scenario where the individual CPUs and GPUs
+%are not the same. In this case, local decisions on how to process the queries would not be enough.
+%
+%Our experiments ran in a very fast network. What if the network was slower? What if the
+%current traffic in the network was a significative factor? Exploring this scenario might produce worthwhile
+%results.
+%
+%We use CPUs and GPUs together. But what about FPGAs? How would they fit in this system? Is it worth it to run it 
+%together with CPUs and GPUs?
+%
+%While the GPU implementation of Faiss is great, it focuses on improving the batch execution time. Would it 
+%be possible to develop a version that focuses, instead, on response time?
+%
+%Last, one interesting project would be to, when the workload is low, increase the accuracy of the searches, instead
+%of simply becoming idle. Conversely, if the workload becomes too high, maybe decreasing the accuracy of the searches
+%might be an alternative. 

@@ -1,0 +1,155 @@
+\documentclass[msc, oldfontcommands]{ppgccufmg} %
+
+\usepackage[english]{babel} %
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{multirow}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage{graphicx}
+\usepackage[square]{natbib}
+\usepackage{array, makecell} %
+
+\usepackage{multirow}
+
+\begin{document}
+
+\ppgccufmg{
+title={Protocol for Error-Verification inside\\Totally Error-Free
+Networks},
+authorrev={da Camara Neto, Vilar Fiuza},
+university={Federal University of Minas Gerais},
+course={Computer Science},
+portuguesetitle={Protocolo para Verificação de Erros\\em Redes
+Totalmente Confiáveis},
+portugueseuniversity={Universidade Federal de Minas Gerais},
+portuguesecourse={Ciência da Computação},
+address={Belo Horizonte},
+date={2005-01},
+advisor={Adamastor Pompeu Setúbal},
+%approval={img/approvalsheet.eps},
+%abstract=[brazil]{Resumo}{resumo},
+%abstract={Abstract}{abstract},
+%dedication={dedicatoria},
+%ack={agradecimentos},
+%epigraphtext={Truth and lie are opposite things.}{Unknown},
+keywords={ola}
+}
+
+\input{intro.tex}
+\input{background.tex}
+\input{PQNNS.tex}
+\input{parallelization.tex}
+\input{cooperative.tex}
+\input{response-time.tex}
+\input{results.tex}
+\input{conclusions.tex}
+
+%\chapter{Introdução}
+%\begin{itemize}
+%    \item Importância de métodos de busca multimedia.
+%    \item Descricao high-level do KNN
+%    \item Descricao high-level do PQ.
+%    \item Descricao high-level de computar na GPU, tradeoffs básicos etc.
+%    \item Descrição da motivação do problema: desejo de se obter um sistema distribuido, utilizando todos os recursos computacionais de forma eficiente (CPU e GPU), para obter menor tempo de resposta possível em condições variáveis de carga.
+%    \item Descrição alto nível do que foi implementado (aka. conteúdo do resto da dissertação).
+%    \item Explicação em alto nível do que será abordado em cada capítulo.
+%\end{itemize}
+%
+%
+%\chapter{Background}
+%\begin{itemize}
+%    \item Descrição do KNN exato e do por quê não é viável em larga escala.
+%    \item Descrição do product quantization (PQ) usando IVF
+%    \item Descricao do primeiro artigo com implementacao em GPU do PQ
+%    \item Descricao do framework Faiss
+%    \item Descrição da implementacao GPU do faiss
+%    \item Descrição da implementação em cluster (artigo da Unb (?))
+%    \item Descrição da implementação usando somente CPU, local, porém com paralelismo dinâmico (do Guilherme (?)).
+%\end{itemize}
+%
+%\chapter{Análise Experimental do IVFPQ em GPU}
+%\begin{itemize}
+%    \item Descrição da implementacao GPU do faiss em mais detalhes
+%    \item Descrição do ambiente de testes.
+%    \item Análise do tempo de execução total e recall variando-se o número de centroids, subdimensoes, probes, quantidade de queries etc.
+%    \item Análise do tempo por query / recall variando-se o número de centroids, subdimensoes, quantidade de queries, probes etc.
+%    \item Modelagem matemática da curva de tempo / query vs queries
+%    \item Discussao sobre o efeito da velocidade da memoria na curva.
+%\end{itemize}
+%
+%\chapter{IVFPQ distribuído em GPU}
+%\begin{itemize}
+%    \item Motivacao do porque executar distribuído
+%    \item Descriçao da arquitetura distribuída
+%    \begin{itemize}
+%        \item MPI
+%        \item Como foi dividido em fases e como cada uma delas funciona em detalhes.
+%        \item Discussão sobre shards vs réplicas e porque vamos utilizar shards.
+%    \end{itemize}
+%    \item Descrição do ambiente de testes.
+%    \item Justificar a escolha de configuracao base.
+%    \item Experimentos relacionados ao tempo de resposta variando-se o tamanho dos blocos em diversas circunstâncias de taxa de requisicao (inclusive não estáticas).
+%    \item Discussão dos resultados. Em particular, introduzir a idéia que para uma certa taxa de requisicao fixa, existe um tamanho ideal de bloco.
+%\end{itemize}
+%
+%\chapter{Gerenciamento Dinâmico da Fila de Queries}
+%\begin{itemize}
+%    \item Discussao sobre porque usar tamanho de bloco fixo não é ideal
+%    \item Proposta de solução tentativa: algoritmo de gerenciamento guloso
+%    \item Análise experimental do algoritmo de gerenciamento guloso variando a taxa de requisicao (inclusive variando dinamicamente).
+%    \item Discussão sobre o por quê que ele não funciona adequadamente, mostrando o modelo da curva e analizando o comportamento esperado em casos de flutuações.
+%    \item Discussão da estrategia que utilizamos para gerenciamento de fila: benchmarking + região ótima da curva (e como detectá-la)
+%    \item Descrição do ambiente de testes.
+%    \item Análise experimental comparativa do tempo de resposta  variando a taxa de requisicao (inclusive variando dinamicamente)
+%    \item Análise experimental do efeito de se usar mais de 1 gpu por nó de busca.
+%\end{itemize}
+%
+%\chapter{Análise Experimental do IVFPQ em CPU}
+%\begin{itemize}
+%    \item Descrição da implementacao CPU do faiss em mais detalhes
+%    \item Descrição do ambiente de testes.
+%    \item Análise experimental comparativa do tempo de execução total / recall variando-se o número de centroids, subdimensoes, probes, quantidade de queries etc.
+%    \item Análise experimental comparativa do tempo por query / recall variando-se o número de centroids, subdimensoes, quantidade de queries, probes etc.
+%    \item Discussão sobre a curva de tempo / query.
+%    \item Discussão das diferenças com relação a GPU, em particular, o efeito da quantidade de centróides, a forma da curva e o desempenho.
+%    \item Discutir sobre a dificuldade de criar um algoritmo distribuido que funcione bem tanto para a CPU quanto para a GPU
+%    \item Mencionar que uma possível solução seria utilizar algoritmos diferentes para a CPU e GPU, porém que esta abordagem não será considerada neste trabalho.
+%    \item Discussão sobre em que cenários faria sentido utilizar a CPU: cue para o próximo capítulo.
+%\end{itemize}
+%
+%\chapter{Lidando com bases gigantes}
+%\begin{itemize}
+%    \item Contextualizar o problema de ter bases tão grandes que mesmo se dividida em pedaços ainda não cabe na memória das GPUs.
+%    \item Discutir sobre o fato de que a CPU é tão lenta que as vezes pode compensar realizar hot-swap dos dados da GPU. Argumentar que dependendo do tamanho da base vs memória da GPU e da taxa de requisições, pode ser que sua decisão mude.   
+%    \item Descrever a solução que implementamos.
+%    \item Descrição do ambiente de testes.
+%    \item Análise experimental, considerando o caso utilizando só GPU (hot-swap sempre), só CPU (0 hot-swap) e ambos (hopefully produzindo resultados melhores).
+%    
+%\end{itemize}
+%
+%\chapter{Conclusão}
+%\begin{itemize}
+%    \item Recap do trabalho.
+%    \item Discutir direções futuras. Exemplos: utilizar algoritmos diferentes para a CPU e GPU, criar um framework genérico, realizar o "benchmarking" dinamicamente.
+%\end{itemize}
+%
+%\ppgccbibliography{bibfile}
+%
+%\begin{appendices}
+%\chapter{Um apêndice}
+%...conteúdo do apêndice...
+%\chapter{Outro apêndice}
+%...conteúdo do apêndice...
+%\end{appendices}
+%% anexos, se houver
+%\begin{attachments}
+%\chapter{Um anexo}
+%
+%\chapter{Outro anexo}
+
+%\end{attachments}
+\end{document}

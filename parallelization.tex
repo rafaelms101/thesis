@@ -1,0 +1,59 @@
+\chapter{IVFADC Parallelization}
+\label{sec:parallel}
+
+This section presents the distributed memory parallelization, the intra-node execution scheme to 
+use CPUs and GPUs cooperatively, and our approach to employ GPUs in 
+scenarios in which that database or index does not fit in its memory.
+
+
+\section{Distributed Memory Parallelization}
+
+
+In our distributed memory parallelization, the database of features 
+is divided into disjoint partitions or shards, which are scattered among the machines. The 
+queries arriving at the system are forwarded to all machines storing partitions 
+of the database, which are responsible for computing their local k-NN using the 
+regular IVFADC before these results are aggregated into a global k-NN answer.
+
+The architecture of the distributed IVFADC is presented in Figure~\ref{fig:arch}. As 
+shown, there are three stages or processes involved in the system: Query 
+Loader (QL), Local Index (LI), and Global Aggregator (GA). 
+Our design is scalable and allows the use of multiple instances for all stages.
+The first step of the system execution involves reading the database and building the index 
+data structure, which is carried out before the search. 
+%This is performed before the actual search and we also store the
+%indexing after building to reuse in future runs. 
+This is performed in parallel by 
+the LI processes, which independently access the file system to load their database 
+partitions and create their local index. 
+
+\begin{figure}[htbp]
+\centerline{\includegraphics[width=0.97\columnwidth]{figs/pq-arch.png}}
+\caption{Distributed IVFADC indexing architecture.}
+\label{fig:arch}
+\end{figure}
+
+After the index is created, the actual search in the distributed system can start. It
+involves all the three aforementioned processes. The QL works as front-end 
+to the search engine and is responsible for receiving the input 
+queries (e.g., from a web server), computing the $w$ nearest centroids in the coarse quantizer, and 
+forwarding this information to all LI processes. This is carried out using an asynchronous 
+multicast to minimize synchronization overheads. Once a LI instance
+receives a query, it visits the index, retrieves the local k-NN feature vectors, and sends its 
+results to the GA responsible for that query. The GA then merges the local results from all LI 
+processes into a global k-NN output.
+
+In order to allow for multiple GA instances, all LIs must direct 
+messages of a given query to the same GA instance. This routing is performed using a labeled 
+communication channel between LI and GA~\cite{4625861}. It employs
+a hash function to map a label ($query\_id$ in our case) to the GA instance that should receive
+the message. This function must return a value from $1\ldots Z$, where $Z$ is the number of
+GA instances, that is used in the message routing. Because each LI can take this decision 
+independently, this is performed without any synchronization.
+
+Our implementation has been performed using the Message Passing Interface (MPI)~\cite{mpi} 
+for inter-process communication. We have additionally optimized the communication 
+among stages during the search using message aggregation to reduce networking 
+overheads. This starts in the QL, where a parameter defines the number of queries 
+that should be grouped for communication, and propagates over the rest of the system as queries are concurrently processed and bundled for communication from LI to GA. 
+%We have noticed that this can significantly improve performance.

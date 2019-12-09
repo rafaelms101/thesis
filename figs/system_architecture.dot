@@ -1,0 +1,15 @@
+digraph {
+  rankdir="LR"
+
+  "queries" [style=invis]
+  "queries result" [style=invis]
+
+  "queries" -> "start node"
+  "start node" -> "search node 1"
+  "start node" -> "..."
+  "start node" -> "search node n"
+  "search node n" -> "aggregator node"
+  "search node 1" -> "aggregator node"
+  "..." -> "aggregator node"
+  "aggregator node" -> "queries result"
+}

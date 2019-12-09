@@ -1,0 +1,126 @@
+\chapter{Product quantization ANN search}
+\label{sec:pqnns}
+
+This section presents the product quantization, its use in nearest 
+neighbor search, the indexing structure employed in the search~\cite{5432202},
+and the single node GPU IVFADC~\cite{8733051}.
+
+\section{Product quantization}
+
+Quantization is a process for reducing the cardinality of the representation space. Considering 
+a $D$-dimensional vector $x$, a quantizer is a function $q$ that maps $x$ into a 
+vector $q(x) \in C = {c_i;i\in L}$, with the index set $L$ of finite size $0 \ldots k-1$. 
+The $c_i$ values are called centroids and $C$ is the codebook. The effective quantization
+of high-dimensional vectors in this framework would require a large codebook to 
+minimize the quantization error~\cite{5432202}. This is, however, impractical because of the 
+high quantization cost and the memory required.
+%to store C.
+
+The product quantization has been proposed to address these issues. In this technique, 
+the vector $x$ is split into $m$ disjoint subvectors $u_j$ ($j \in 1...m)$ with $D^*=D/m$ 
+dimensions, assuming $D$ multiple of $m$. Each $x$ is quantized as follows:
+
+\begin{equation}
+\small
+\underbrace{x_1,...,x_{D^{*}}}_{u_1(x)},...,\underbrace{x_{D-D^{*}+1},...,x_D}_{u_m(x)} \rightarrow q_1(u_1(x)),...,q_m(u_m(x))
+\end{equation} 
+
+This results in quantizing $x$ through a Cartesian product of its quantized subvectors:
+
+\begin{equation}\label{eq:subquant}
+q(y) = q_1(u_1) \times q_2(u_2) \times ... \times q_m(u_m)
+\end{equation}
+
+This process creates large codebooks by using low-complexity quantizers 
+in subvectors. The quantized vectors are represented by a composition of
+subvector quantization indices ($\tau = \tau_1 \times \ldots \times \tau_m$), leading
+to a codebook $C = C_1 \times \ldots \times C_m$ with $C_j$ being the centroids 
+used for each subvector quantization. Assuming that $k$ centroids are employed in each
+subvector, the codebook $C$ contains $k^m$ quantization combinations.
+
+The next step to use quantization in nearest neighbor search is to compute distances
+in quantized spaces. Among the approaches proposed in~\cite{5432202},
+the Asymmetric Distance Computation (ADC) has been the most efficient. ADC 
+computes the distance between a query object $x$ and a quantized document $y$
+in the database as follows:
+
+\begin{equation}
+\tilde{d}(x,y) = d(x, q(y)) = \sqrt{\sum_{j=1}^{m} d(u_j(x), q_j(u_j(y)))^2}
+\end{equation}
+
+\section{Searching with quantization using IVFADC}
+
+The product quantization does not avoid the search from computing distances to all $n$ data objects stored
+in the database. This is achieved by using an inverted file with asymmetric distance
+computation (IVFADC). In
+this case, the dataset $Y$ is partitioned among the array lists $L_1 \ldots L_{k'}$ associated to each inverted file entry.
+This assignment uses a quantization function ($q_c$) from a coarse centroid set ($C_c$)
+of size $k'$, such that each list $L_i$ has an associated centroid $c_i \in C_c$. Thus, a 
+list $L_i$ stores the set ${y \in Y : q_c(y) = c_i}$. The search  
+takes place only on list entries with centroids that are close to the query 
+vector $x$.
+
+
+\begin{algorithm}[h]
+\caption{Indexing and Searching with IVFADC}
+\label{alg:ivfadc}
+\begin{algorithmic}[1]
+\Procedure{Indexing}{y}       
+    \State k$'$ $\gets$ q$_c$(y)
+    \State r$_y \gets$ y - C$_c$[k$'$]
+    \State code $\gets$ q$_p$(r$_y$)
+    \State index[k$'$].append(y.id,code)
+\EndProcedure
+\Procedure{Searching}{x, w, k}
+%    \State $ann = \emptyset$
+    \State nnc = kNN(C$_c$, x, w) \Comment{w nearest c$_i\in$ C$_c$}
+    \For{i $\in$ 1$\ldots$ w} %\Comment{Quantize to $w$ nearest $c_i\in C_c$}
+ %       \State $k' \gets q_c(x)$
+        \State r$_x \gets$ x - C$_c$[ncc[i]] 
+        \State distList $\gets$ dist(index[ncc[i]], r$_x$))
+        \State ann $\gets$ kNN(ann, distList)
+ %       \State $C_c \gets C_c \setminus C_c(k')$
+    \EndFor
+    \State \textbf{return} ann
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+The indexing and searching steps of the IVFADC are presented in Algorithm~\ref{alg:ivfadc}. 
+During the indexing, each feature vector $y$ is quantized using the coarse centroids to find the list ($k'$)
+in the inverted file in which it should be inserted (line~2). Furthermore, in lines~3 and~4, the 
+residual value ($r_y$) of $y$ to its coarse quantizer centroid is computed, and $r_y$ is 
+quantized using the product quantizer $q_p$ with the $m$ subvectors and 
+corresponding centroid sets. Finally, the identifier of the multimedia object described
+along with the product quantizer index ($code$) are inserted in the L$_{k'}$ inverted list.
+
+The searching procedure is presented in lines~7-15. It receives as input the query descriptor $x$, 
+the number $w$ of lists in the inverted file that should be searched, and the number of 
+neighbors to return ($k$). The searched lists are those associated with the $w$ nearest 
+neighbors of $x$ in the coarse codebook ($C_c$) as computed in line~8. Furthermore, for each of 
+the $w$ lists, the residual ($r_x$) of $x$ to the coarse centroid associated to that list ($nnc[i]$) is 
+computed (line~10). The respective list in the inverted file is then accessed to compute 
+the distance from $r_x$ to the residual value of elements it stores (line~11). Further, the elements with the $k$ smallest
+distance values are selected, and merged with nearest neighbors ($ann$) already found. After 
+visiting $w$ lists, $ann$ contains the final results and is returned. It is worth mentioning that the
+centroid sets used are learned using a k-means clustering in an off-line
+training phase. Also, $w$ lists are visited because the nearest neighbors may not be stored in
+the exact nearest list or partition of the database.
+
+\section{GPU-based IVFADC}
+
+The first GPU implementation of IVFADC able to handle billion-scale databases of descriptors was
+introduced in~\cite{7780592}. It used multi-level quantization with a tree scheme
+to minimize the memory demands. One of the main challenges with the efficient implementation 
+of IVFADC to GPUs refers to the k-selection phase, which offers low parallelism 
+in update operations and presents high warp divergence.
+
+These challenging aspects were addressed in~\cite{8733051} with an new efficient k-selection algorithm 
+for GPUs and an optimized overall IVFADC implementation. With the use of a variant of the Batcher's bitonic 
+sorting network~\cite{batcher1968sorting} that makes clever use of the register file, this implementation
+of IVFADC attained significant performance improvements as compared to~\cite{7780592}. As 
+far as we know, the GPU-based IVFADC implemented in~\cite{8733051} is the state-of-the-art ANN GPU 
+implementation. Also, it is deployed as an open source in the FAISS~\cite{faiss} library developed and
+maintained by the Facebook AI Research group. In this paper, we use this GPU implementation as a basic 
+building block in our distributed and out-of-core system, meaning that the codes we call for execution
+in the GPU in each node of the distributed setting is a modified version of FAISS.
